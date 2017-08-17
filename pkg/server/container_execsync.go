@@ -23,8 +23,6 @@ import (
 	"time"
 
 	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/api/services/events/v1"
-	"github.com/containerd/containerd/typeurl"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"k8s.io/client-go/tools/remotecommand"
@@ -131,50 +129,23 @@ func (c *criContainerdService) execInContainer(ctx context.Context, id string, o
 		}
 	})
 
-	// Get containerd event client first, so that we won't miss any events.
-	// TODO(random-liu): Add filter to only subscribe events of the exec process.
-	// TODO(random-liu): Use `Wait` after is fixed. (containerd#1279, containerd#1287)
-	cancellable, cancel := context.WithCancel(ctx)
-	eventstream, err := c.eventService.Subscribe(cancellable, &events.SubscribeRequest{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe event stream: %v", err)
-	}
-	defer cancel()
+	statusC := make(chan uint32, 1)
+	go func() {
+		status, err := process.Wait(ctx)
+		if err != nil {
+			glog.Errorf("Failed to wait process: %v", err)
+		}
+		statusC <- status
+	}()
 
 	if err := process.Start(ctx); err != nil {
 		return nil, fmt.Errorf("failed to start exec %q: %v", execID, err)
 	}
 
-	exitCode, err := c.waitContainerExec(eventstream, id, execID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to wait for exec in container %q to finish: %v", id, err)
-	}
+	exitCode := <-statusC
 
 	// Wait for the io to be drained.
 	process.IO().Wait()
 
-	return exitCode, nil
-}
-
-// waitContainerExec waits for container exec to finish and returns the exit code.
-func (c *criContainerdService) waitContainerExec(eventstream events.Events_SubscribeClient, id string,
-	execID string) (*uint32, error) {
-	for {
-		evt, err := eventstream.Recv()
-		if err != nil {
-			return nil, err
-		}
-		// Continue until the event received is of type task exit.
-		if !typeurl.Is(evt.Event, &events.TaskExit{}) {
-			continue
-		}
-		any, err := typeurl.UnmarshalAny(evt.Event)
-		if err != nil {
-			return nil, err
-		}
-		e := any.(*events.TaskExit)
-		if e.ContainerID == id && e.ID == execID {
-			return &e.ExitStatus, nil
-		}
-	}
+	return &exitCode, nil
 }
