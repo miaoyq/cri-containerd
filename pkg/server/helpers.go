@@ -370,8 +370,8 @@ func initSelinuxOpts(selinuxOpt *runtime.SELinuxOption) (string, string, error) 
 	labelOpts := fmt.Sprintf("%s:%s:%s:%s",
 		selinuxOpt.GetUser(),
 		selinuxOpt.GetRole(),
-		selinuxOpt.GetRole(),
-		selinuxOpt.GetType())
+		selinuxOpt.GetType(),
+		selinuxOpt.GetLevel())
 	return label.InitLabels(selinux.DupSecOpt(labelOpts))
 }
 
