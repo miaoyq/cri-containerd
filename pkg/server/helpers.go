@@ -367,6 +367,14 @@ func initSelinuxOpts(selinuxOpt *runtime.SELinuxOption) (string, string, error) 
 		return "", "", nil
 	}
 
+	// Should ignored selinuxOpts if they are incomplete.
+	if selinuxOpt.GetUser() == "" ||
+		selinuxOpt.GetRole() == "" ||
+		selinuxOpt.GetType() == "" ||
+		selinuxOpt.GetLevel() == "" {
+		return "", "", nil
+	}
+
 	labelOpts := fmt.Sprintf("%s:%s:%s:%s",
 		selinuxOpt.GetUser(),
 		selinuxOpt.GetRole(),

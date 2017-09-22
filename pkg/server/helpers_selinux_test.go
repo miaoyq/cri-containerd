@@ -19,7 +19,6 @@ limitations under the License.
 package server
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/opencontainers/selinux/go-selinux"
@@ -32,15 +31,6 @@ func TestInitSelinuxOpts(t *testing.T) {
 		return
 	}
 
-	var pLabelNolevel, mLabelNolevel string
-	pLabel, mLabel := selinux.ContainerLabels()
-	if pLabel != "" && mLabel != "" {
-		pcon := selinux.NewContext(pLabel)
-		mcon := selinux.NewContext(mLabel)
-		pLabelNolevel = fmt.Sprintf("%s:%s:%s", pcon["user"], pcon["role"], pcon["type"])
-		mLabelNolevel = fmt.Sprintf("%s:%s:%s", mcon["user"], mcon["role"], mcon["type"])
-	}
-
 	for desc, test := range map[string]struct {
 		selinuxOpt   *runtime.SELinuxOption
 		processLabel string
@@ -51,25 +41,15 @@ func TestInitSelinuxOpts(t *testing.T) {
 			processLabel: "",
 			mountLabels:  []string{"", ""},
 		},
-		"Should be resolved correctly when selinuxOpt is not nil but has not been initialized": {
-			selinuxOpt: &runtime.SELinuxOption{
-				User:  "",
-				Role:  "",
-				Type:  "",
-				Level: "",
-			},
-			processLabel: pLabelNolevel,
-			mountLabels:  []string{mLabelNolevel, ""},
-		},
-		"Should be resolved correctly when selinuxOpt has been initialized partially": {
+		"Should return empty strings for processLabel and mountLabel when selinuxOpt has been initialized partially": {
 			selinuxOpt: &runtime.SELinuxOption{
 				User:  "",
 				Role:  "user_r",
 				Type:  "",
 				Level: "s0:c1,c2",
 			},
-			processLabel: pLabelNolevel,
-			mountLabels:  []string{mLabelNolevel, ""},
+			processLabel: "",
+			mountLabels:  []string{"", ""},
 		},
 		"Should be resolved correctly when selinuxOpt has been initialized completely": {
 			selinuxOpt: &runtime.SELinuxOption{
@@ -85,12 +65,7 @@ func TestInitSelinuxOpts(t *testing.T) {
 		t.Logf("TestCase %q", desc)
 		processLabel, mountLabel, err := initSelinuxOpts(test.selinuxOpt)
 		assert.NoError(t, err)
-		if desc == "testUser" {
-			assert.Equal(t, test.processLabel, processLabel)
-			assert.Contains(t, test.mountLabels, mountLabel)
-		} else {
-			assert.Regexp(t, "^"+test.processLabel, processLabel)
-			assert.Regexp(t, "^"+test.mountLabels[0], mountLabel)
-		}
+		assert.Equal(t, test.processLabel, processLabel)
+		assert.Contains(t, test.mountLabels, mountLabel)
 	}
 }
